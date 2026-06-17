@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Search, Refresh, Plus, SwitchButton, Delete } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus, SwitchButton, Delete, Edit } from '@element-plus/icons-vue'
 import {
   getInitialSchedules,
   saveSchedules,
@@ -20,6 +20,7 @@ const courses = ref<Course[]>([])
 const searchKeyword = ref('')
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
+const editingId = ref<string | null>(null)
 
 const scheduleForm = ref({
   courseId: '',
@@ -87,6 +88,7 @@ const handleReset = () => {
 }
 
 const openAddDialog = () => {
+  editingId.value = null
   scheduleForm.value = {
     courseId: '',
     className: '',
@@ -95,6 +97,25 @@ const openAddDialog = () => {
     classroom: ''
   }
   dialogVisible.value = true
+}
+
+const openEditDialog = (row: Schedule) => {
+  editingId.value = row.id
+  scheduleForm.value = {
+    courseId: row.courseId,
+    className: row.className,
+    weekday: row.weekday,
+    timeSlot: row.timeSlot,
+    classroom: row.classroom
+  }
+  dialogVisible.value = true
+}
+
+const checkConflict = (weekday: string, timeSlot: string, classroom: string, excludeId?: string | null): Schedule | null => {
+  return schedules.value.find((s) => {
+    if (excludeId && s.id === excludeId) return false
+    return s.weekday === weekday && s.timeSlot === timeSlot && s.classroom === classroom
+  }) || null
 }
 
 const handleAddConfirm = async () => {
@@ -112,21 +133,50 @@ const handleAddConfirm = async () => {
       return
     }
 
-    const newSchedule: Schedule = {
-      id: `S${String(schedules.value.length + 1).padStart(3, '0')}`,
-      courseId: selectedCourse.id,
-      courseName: selectedCourse.name,
-      className: scheduleForm.value.className,
-      teacher: selectedCourse.teacher,
-      weekday: scheduleForm.value.weekday as Schedule['weekday'],
-      timeSlot: scheduleForm.value.timeSlot as Schedule['timeSlot'],
-      classroom: scheduleForm.value.classroom,
-      createdAt: new Date().toLocaleString('zh-CN')
+    const conflict = checkConflict(
+      scheduleForm.value.weekday,
+      scheduleForm.value.timeSlot,
+      scheduleForm.value.classroom,
+      editingId.value
+    )
+    if (conflict) {
+      ElMessage.error(`教室「${conflict.classroom}」在${conflict.weekday}${conflict.timeSlot}已被「${conflict.courseName}」占用`)
+      return
     }
 
-    schedules.value.unshift(newSchedule)
-    saveSchedules(schedules.value)
-    ElMessage.success('课表添加成功')
+    if (editingId.value) {
+      const index = schedules.value.findIndex((s) => s.id === editingId.value)
+      if (index > -1) {
+        schedules.value[index] = {
+          ...schedules.value[index],
+          courseId: selectedCourse.id,
+          courseName: selectedCourse.name,
+          className: scheduleForm.value.className,
+          teacher: selectedCourse.teacher,
+          weekday: scheduleForm.value.weekday as Schedule['weekday'],
+          timeSlot: scheduleForm.value.timeSlot as Schedule['timeSlot'],
+          classroom: scheduleForm.value.classroom
+        }
+        saveSchedules(schedules.value)
+        ElMessage.success('课表编辑成功')
+      }
+    } else {
+      const newSchedule: Schedule = {
+        id: `S${String(schedules.value.length + 1).padStart(3, '0')}`,
+        courseId: selectedCourse.id,
+        courseName: selectedCourse.name,
+        className: scheduleForm.value.className,
+        teacher: selectedCourse.teacher,
+        weekday: scheduleForm.value.weekday as Schedule['weekday'],
+        timeSlot: scheduleForm.value.timeSlot as Schedule['timeSlot'],
+        classroom: scheduleForm.value.classroom,
+        createdAt: new Date().toLocaleString('zh-CN')
+      }
+
+      schedules.value.unshift(newSchedule)
+      saveSchedules(schedules.value)
+      ElMessage.success('课表添加成功')
+    }
     dialogVisible.value = false
   })
 }
@@ -207,8 +257,11 @@ const goToCourses = () => {
             <el-table-column prop="weekday" label="星期" width="80" align="center" />
             <el-table-column prop="timeSlot" label="时段" width="100" align="center" />
             <el-table-column prop="classroom" label="教室" width="140" />
-            <el-table-column label="操作" width="100" fixed="right" align="center">
+            <el-table-column label="操作" width="140" fixed="right" align="center">
               <template #default="{ row }">
+                <el-button link type="primary" :icon="Edit" @click="openEditDialog(row)">
+                  编辑
+                </el-button>
                 <el-button link type="danger" :icon="Delete" @click="handleDelete(row)">
                   删除
                 </el-button>
@@ -221,7 +274,7 @@ const goToCourses = () => {
 
     <el-dialog
       v-model="dialogVisible"
-      title="新增课表"
+      :title="editingId ? '编辑课表' : '新增课表'"
       width="520px"
       :close-on-click-modal="false"
       destroy-on-close
@@ -315,7 +368,7 @@ const goToCourses = () => {
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleAddConfirm">确认添加</el-button>
+        <el-button type="primary" @click="handleAddConfirm">{{ editingId ? '确认编辑' : '确认添加' }}</el-button>
       </template>
     </el-dialog>
   </div>
