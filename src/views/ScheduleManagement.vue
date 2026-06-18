@@ -12,6 +12,7 @@ import {
 } from '../mock/schedules'
 import { getInitialCourses, type Course } from '../mock/courses'
 import { mockUsers } from '../mock/accounts'
+import { checkClassroomConflict } from '../utils/scheduleConflict'
 
 const router = useRouter()
 
@@ -111,13 +112,6 @@ const openEditDialog = (row: Schedule) => {
   dialogVisible.value = true
 }
 
-const checkConflict = (weekday: string, timeSlot: string, classroom: string, excludeId?: string | null): Schedule | null => {
-  return schedules.value.find((s) => {
-    if (excludeId && s.id === excludeId) return false
-    return s.weekday === weekday && s.timeSlot === timeSlot && s.classroom === classroom
-  }) || null
-}
-
 const handleAddConfirm = async () => {
   if (!formRef.value) return
   await formRef.value.validate((valid) => {
@@ -133,14 +127,15 @@ const handleAddConfirm = async () => {
       return
     }
 
-    const conflict = checkConflict(
+    const conflictResult = checkClassroomConflict(
+      schedules.value,
       scheduleForm.value.weekday,
       scheduleForm.value.timeSlot,
       scheduleForm.value.classroom,
       editingId.value
     )
-    if (conflict) {
-      ElMessage.error(`教室「${conflict.classroom}」在${conflict.weekday}${conflict.timeSlot}已被「${conflict.courseName}」占用`)
+    if (conflictResult.hasConflict) {
+      ElMessage.error(conflictResult.message)
       return
     }
 
