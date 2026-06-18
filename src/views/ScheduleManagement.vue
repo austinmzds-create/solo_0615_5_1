@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Search, Refresh, Plus, SwitchButton, Delete, Edit } from '@element-plus/icons-vue'
@@ -16,9 +16,12 @@ import { checkClassroomConflict } from '../utils/scheduleConflict'
 
 const router = useRouter()
 
+const TEACHER_FILTER_KEY = 'smart_campus_schedule_teacher_filter'
+
 const schedules = ref<Schedule[]>([])
 const courses = ref<Course[]>([])
 const searchKeyword = ref('')
+const selectedTeacher = ref('')
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
 const editingId = ref<string | null>(null)
@@ -48,12 +51,24 @@ const currentUser = computed(() => {
   return mockUsers.find((u) => u.username === username) || null
 })
 
+const teacherOptions = computed(() => {
+  const teachers = new Set<string>()
+  for (const s of schedules.value) {
+    if (s.teacher) teachers.add(s.teacher)
+  }
+  return Array.from(teachers).sort()
+})
+
 const filteredSchedules = computed(() => {
+  let result = schedules.value
+  if (selectedTeacher.value) {
+    result = result.filter((s) => s.teacher === selectedTeacher.value)
+  }
   if (!searchKeyword.value.trim()) {
-    return schedules.value
+    return result
   }
   const keyword = searchKeyword.value.trim().toLowerCase()
-  return schedules.value.filter(
+  return result.filter(
     (s) =>
       s.courseName.toLowerCase().includes(keyword) ||
       s.className.toLowerCase().includes(keyword) ||
@@ -79,6 +94,18 @@ onMounted(() => {
   }
   schedules.value = getInitialSchedules()
   courses.value = getInitialCourses()
+  const savedTeacher = localStorage.getItem(TEACHER_FILTER_KEY)
+  if (savedTeacher) {
+    selectedTeacher.value = savedTeacher
+  }
+})
+
+watch(selectedTeacher, (newVal) => {
+  if (newVal) {
+    localStorage.setItem(TEACHER_FILTER_KEY, newVal)
+  } else {
+    localStorage.removeItem(TEACHER_FILTER_KEY)
+  }
 })
 
 const handleSearch = () => {
@@ -87,6 +114,7 @@ const handleSearch = () => {
 
 const handleReset = () => {
   searchKeyword.value = ''
+  selectedTeacher.value = ''
 }
 
 const openAddDialog = () => {
@@ -232,6 +260,22 @@ const goToCourses = () => {
       <el-main class="page-main">
         <el-card class="filter-card" shadow="never">
           <el-form inline>
+            <el-form-item label="任课教师">
+              <el-select
+                v-model="selectedTeacher"
+                placeholder="全部教师"
+                clearable
+                style="width: 180px"
+              >
+                <el-option
+                  v-for="teacher in teacherOptions"
+                  :key="teacher"
+                  :label="teacher"
+                  :value="teacher"
+                />
+              </el-select>
+            </el-form-item>
+
             <el-form-item label="搜索">
               <el-input
                 v-model="searchKeyword"
