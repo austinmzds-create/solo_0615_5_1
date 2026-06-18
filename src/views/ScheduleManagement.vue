@@ -22,6 +22,7 @@ const searchKeyword = ref('')
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
 const editingId = ref<string | null>(null)
+const originalCourseId = ref<string | null>(null)
 
 const scheduleForm = ref({
   courseId: '',
@@ -65,7 +66,7 @@ const courseOptions = computed(() => {
   return courses.value.map((c) => ({
     value: c.id,
     label: c.name,
-    disabled: c.status === 'inactive',
+    disabled: c.status === 'inactive' && c.id !== originalCourseId.value,
     teacher: c.teacher,
     status: c.status
   }))
@@ -90,6 +91,7 @@ const handleReset = () => {
 
 const openAddDialog = () => {
   editingId.value = null
+  originalCourseId.value = null
   scheduleForm.value = {
     courseId: '',
     className: '',
@@ -102,6 +104,7 @@ const openAddDialog = () => {
 
 const openEditDialog = (row: Schedule) => {
   editingId.value = row.id
+  originalCourseId.value = row.courseId
   scheduleForm.value = {
     courseId: row.courseId,
     className: row.className,
@@ -122,8 +125,13 @@ const handleAddConfirm = async () => {
       ElMessage.error('请选择有效的课程')
       return
     }
-    if (selectedCourse.status === 'inactive') {
-      ElMessage.error('停用课程不能用于新建课表')
+
+    const courseChanged = scheduleForm.value.courseId !== originalCourseId.value
+
+    if (editingId.value && !courseChanged) {
+      // editing with original course kept: allow save even if inactive
+    } else if (selectedCourse.status === 'inactive') {
+      ElMessage.error(editingId.value ? '换课时不能选择停用课程' : '停用课程不能用于新建课表')
       return
     }
 
@@ -290,10 +298,10 @@ const goToCourses = () => {
             >
               <span style="float: left">{{ course.label }}</span>
               <span
-                v-if="course.disabled"
+                v-if="course.status === 'inactive'"
                 style="float: right; color: #909399; font-size: 12px"
               >
-                已停用
+                {{ course.value === originalCourseId ? '已停用(原课程)' : '已停用' }}
               </span>
               <span
                 v-else
@@ -304,7 +312,7 @@ const goToCourses = () => {
             </el-option>
           </el-select>
           <div style="font-size: 12px; color: #909399; margin-top: 4px">
-            提示：停用课程不能选择
+            {{ editingId ? '提示：可保留原课程不变；换课时只能选择启用课程' : '提示：停用课程不能选择' }}
           </div>
         </el-form-item>
 
