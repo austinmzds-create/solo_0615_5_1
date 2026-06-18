@@ -108,6 +108,12 @@ watch(selectedTeacher, (newVal) => {
   }
 })
 
+watch(teacherOptions, (newOptions) => {
+  if (selectedTeacher.value && !newOptions.includes(selectedTeacher.value)) {
+    selectedTeacher.value = ''
+  }
+})
+
 const handleSearch = () => {
   // filtering is reactive via computed
 }
